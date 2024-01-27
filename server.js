@@ -1,9 +1,10 @@
 const express = require('express');
+require('dotenv').config();
 const app = express();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 app.use(express.json());
-const post = [
+const posts = [
   {
     username: 'Kyle',
     title: 'Post 1',
@@ -16,8 +17,8 @@ const post = [
 
 const users = [];
 
-app.get('/', (req, res) => {
-  res.json(post);
+app.get('/', authenticateToken, (req, res) => {
+  res.json(posts.filter((post) => post.username === req.user.name));
 });
 
 app.get('login', (req, res) => {
@@ -27,7 +28,6 @@ app.get('login', (req, res) => {
 
 app.post('/register', async (req, res) => {
   try {
-    const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(req.body.password, 10);
     const user = { name: req.body.name, password: hashedPassword };
     users.push(user);
@@ -44,13 +44,27 @@ app.post('/login', async (req, res) => {
   }
   try {
     if (await bcrypt.compare(req.body.password, user.password)) {
-      res.send('Success');
+      const access_token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET);
+      res.json({ access_token: access_token });
     } else {
+      console.log('Not Allowed');
       res.send('Not Allowed');
     }
   } catch {
     res.status(500).send();
   }
 });
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader;
+  if (token == null) return res.sendStatus(401);
+
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
 
 app.listen(3000, () => console.log('Server running on port 3000'));
